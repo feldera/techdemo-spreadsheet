@@ -272,7 +272,7 @@ impl eframe::App for SpreadsheetApp {
                     }
                 })
                 .body(|body| {
-                    body.rows(Self::DEFAULT_ROW_HEIGHT, self.num_rows + 1, |mut row| {
+                    body.rows(Self::DEFAULT_ROW_HEIGHT, self.num_rows, |mut row| {
                         let row_index = row.index();
                         row.col(|ui| {
                             ui.strong(row_index.to_string());

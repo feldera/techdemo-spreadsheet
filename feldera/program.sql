@@ -29,13 +29,12 @@ create table spreadsheet_data (
             "config": {
                 "workers": 1,
                 "plan": [{
-                    "rate": 1,
-                    "limit": 2,
+                    "limit": 23,
                     "fields": {
-                        "id": { "range": [0, 1000] },
-                        "ip": { "strategy": "uniform", "range": [0, 5] },
-                        "raw_value": { "values": ["42", "=A0"] },
-                        "background": { "strategy": "uniform", "range": [0, 1000] }
+                        "id": { "values": [1039999974, 0, 1, 2, 12, 14, 40, 66, 92, 118, 170, 196, 222, 13, 65, 91, 117, 15, 41, 67, 93, 119, 39, 144] },
+                        "ip": { "values": ["0"] },
+                        "raw_value": { "values": ["42", "=A39999999", "=A0", "=A0+B0", "Reference", "Functions", "=ABS(-1)", "=AVERAGE(1,2,3,1,2,3)", "={1,2,3}+{1,2,3}", "=SUM(1,2,3)", "=PRODUCT(ABS(1),2*1, 3,4*1)", "=RIGHT(\"apple\", 3)", "=LEFT(\"apple\", 3)", "Logic", "=2>=1", "=OR(1>1,1<>1)", "=AND(\"test\",\"True\", 1, true)", "Datetime", "2019-03-01T02:00:00.000Z", "2019-08-30T02:00:00.000Z", "=DAYS(P1, P2)", "=P1+5", "=XOR(0,1)", "=IF(TRUE,1,0)"] },
+                        "background": { "strategy": "uniform", "range": [0, 1] }
                     }
                 }]
             }
