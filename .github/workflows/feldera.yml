@@ -1,4 +1,4 @@
-name: Deploy Feldera Program in Feldera Cloud
+name: Deploy Feldera Pipeline
 
 on:
   push:
@@ -27,6 +27,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Download and install fda binary
         run: cargo install fda
-      # Make sure FELDERA_API_KEY and FELDERA_HOST are set in the repository secrets
       - name: Deploy Feldera Pipeline
         run: cd feldera && bash deploy.sh
+        env:
+          FELDERA_API_KEY: ${{ secrets.FELDERA_API_KEY }}
+          FELDERA_HOST: ${{ secrets.FELDERA_HOST }}

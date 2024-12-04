@@ -1,10 +1,16 @@
 # See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
 
-name: Fly Deploy
+name: Fly Deploy Backend
 on:
   push:
     branches:
       - main
+    paths:
+      - 'server/**'
+      - '.github/workflows/server.yml'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+
 jobs:
   deploy:
     name: Deploy app
@@ -13,6 +19,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
+      - run: cd server && flyctl deploy --remote-only
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
