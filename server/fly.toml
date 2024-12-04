@@ -1,0 +1,25 @@
+# fly.toml app configuration file generated for xls on 2024-11-26T10:22:31-08:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'xls'
+primary_region = 'sjc'
+
+[build]
+
+[env]
+  PORT = '8080'
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1

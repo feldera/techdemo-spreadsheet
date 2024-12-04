@@ -1,0 +1,27 @@
+{
+  "name": "Spreadsheet TechDemo PWA",
+  "short_name": "spreadsheet-techdemo-pwa",
+  "icons": [
+    {
+      "src": "./feldera-dark.svg",
+      "sizes": "654x285",
+      "type": "image/svg"
+    },
+    {
+      "src": "./feldera-light.svg",
+      "sizes": "654x285",
+      "type": "image/svg"
+    },
+    {
+      "src": "./ferris.png",
+      "sizes": "460x307",
+      "type": "image/png"
+    }
+  ],
+  "lang": "en-US",
+  "id": "/index.html",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "white",
+  "theme_color": "white"
+}

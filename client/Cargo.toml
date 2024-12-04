@@ -1,0 +1,34 @@
+[package]
+name = "spreadsheet-techdemo"
+version = "0.1.0"
+authors = ["Gerd Zellweger <mail@gerdzellweger.com>"]
+edition = "2021"
+include = ["LICENSE-APACHE", "LICENSE-MIT", "**/*.rs", "Cargo.toml"]
+rust-version = "1.76"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["wasm32-unknown-unknown"]
+
+[dependencies]
+egui = "0.29"
+egui_plot = "0.29"
+egui_extras = { version  = "0.29", features = ["all_loaders", "svg"] }
+image = { version = "0.25", features = ["png"] }
+eframe = { version = "0.29", default-features = false, features = ["default_fonts", "glow"] }
+log = "0.4"
+ehttp = { version = "0.5", features = ["streaming", "json"] }
+ewebsock = "0.8.0"
+lru = "0.12.5"
+gloo-timers = "0.3.0"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.11"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-logger = "0.2.0"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3.70", features = ["console"] }
+
