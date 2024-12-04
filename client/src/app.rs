@@ -138,7 +138,7 @@ impl eframe::App for SpreadsheetApp {
                     ctx.output_mut(|o| o.open_url = Some(OpenUrl::new_tab("https://feldera.com")));
                 }
                 if ui.button(format!("Fork me on Github {GITHUB}")).clicked() {
-                    ctx.output_mut(|o| o.open_url = Some(OpenUrl::new_tab("https://github.com/feldera/spreadsheet-techdemo")));
+                    ctx.output_mut(|o| o.open_url = Some(OpenUrl::new_tab("https://github.com/feldera/techdemo-spreadsheet")));
                 }
             });
         });
