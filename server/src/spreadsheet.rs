@@ -6,6 +6,7 @@ use axum::{
     extract::{connect_info::ConnectInfo, Json, State},
     response::IntoResponse,
 };
+use axum::http::HeaderMap;
 use chrono::Utc;
 use futures::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, trace, warn};
@@ -222,12 +223,18 @@ struct UpdatePayload {
 }
 
 pub(crate) async fn post_handler(
+    headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     State(state): State<AppState>,
     Json(update_request): Json<UpdateRequest>,
 ) -> impl IntoResponse {
-    let addr = addr.ip().to_string().chars().take(45).collect::<String>();
-    if state.api_limits.contains(&addr) {
+    // Load balancer puts the client IP in the HTTP header
+    const CLIENT_IP_HEADER: &str = "Fly-Client-IP";
+    let client_ip = headers.get(CLIENT_IP_HEADER).map(|ip| {
+        String::from_utf8_lossy(ip.as_bytes()).chars().take(45).collect::<String>()
+    }).unwrap_or(addr.ip().to_string().chars().take(45).collect::<String>());
+
+    if state.api_limits.contains(&client_ip) {
         return (
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             Json(serde_json::json!({"error": "API limit exceeded"})),
@@ -245,7 +252,7 @@ pub(crate) async fn post_handler(
         id: update_request.id,
         raw_value,
         background: update_request.background,
-        ip: addr,
+        ip: client_ip,
         ts: Utc::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
     };
 
