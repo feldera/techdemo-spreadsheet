@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 jobs:
-  build-github-pages:
+  deploy-pipeline:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4 # repo checkout

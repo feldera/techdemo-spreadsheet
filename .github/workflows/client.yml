@@ -17,7 +17,6 @@ permissions:
 
 env:
   public_url: "https://xls.feldera.io/"
-  API_HOST: "https://xls.fly.dev"
 
 jobs:
   build-github-pages:
@@ -42,6 +41,8 @@ jobs:
         # relatively as eframe_template/favicon.ico. if we skip public-url option, the href paths will instead request username.github.io/favicon.ico which
         # will obviously return error 404 not found.
         run: ./trunk build --release --public-url $public_url --config client/Trunk.toml
+        env:
+          API_HOST: ${{ secrets.API_HOST }}
       - name: Upload WASM build artifact
         uses: actions/upload-pages-artifact@v1
         with:

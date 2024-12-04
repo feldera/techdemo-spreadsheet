@@ -1,70 +1,84 @@
-# 1bln Cell Spreadsheet
+# 1bln Cell Spreadsheet Techdemo
 
 This is a tech demo showing incremental computation for a simple, spreadsheet-like application.
-The application uses feldera as the DBMS/incremental compute engine, and axum as the backend
+The application uses feldera as the DBMS/incremental compute engine, axum as the backend
 and egui as the frontend.
 
-## Local development
+The project is split into three components from the root directory:
 
-You'll need to have rust, `cargo`, `fda` and `trunk` (last two both through `cargo install`)
-installed to run this application locally.
+- The `feldera` directory contains the feldera pipeline (written in Feldera/SQL and some Rust UDF code).
+- The `server` directory contains the backend application (written in Rust using the axum webserver).
+- The `client` directory contains the frontend application (written in Rust using the egui UI library).
 
-Run the backend fom the `server` directory:
+## Local Installation
+
+You'll need a working rust installation to run the project locally.
+
+### Feldera
+
+Install a [feldera instance](https://docs.feldera.com/get-started) and or alternatively use the
+feldera instance running on `https://try.feldera.com`.
+Also install the CLI tool [fda](https://docs.feldera.com/reference/cli).
+
+Then make sure to set the `FELDERA_API_KEY` and `FELDERA_HOST` environment variables to access the feldera instance.
+Execute the `deploy.sh` script in the `feldera` directory to deploy the pipeline to the feldera instance.
+
+```bash
+export FELDERA_API_KEY=apikey:...
+export FELDERA_HOST=https://try.feldera.com
+cd feldera && bash deploy.sh
+```
+
+### Server
+
+Run the `server` application with cargo:
 
 ```bash
 cd server
-RUST_LOG=debug FELDERA_KEY='' cargo run
+cargo run
 ```
 
-To access the feldera instance if already defined in your environment `FELDERA_HOST` and `FELDERA_KEY`, take
-precedence. You can unset these variable to use the local instance:
+Now the backend should be running on `http://localhost:3000`.
 
-```bash
-unset FELDERA_KEY
-unset FELDERA_HOST
-```
+### Client
 
-Run the frontend from the `client` directory:
+Run the `client` application with trunk:
 
 ```bash
 cd client
-trunk serve --port 7777
+API_HOST=http://localhost:3000 trunk serve --port 7777
 ```
 
-Run the database from the `feldera` directory:
+Now the frontend should be running on `http://localhost:7777`.
 
-Make sure you have a feldera instance running on `http://localhost:8080`.
+## Automated Deployment with Github Actions
 
-```bash
-git clone https://github.com/feldera/feldera.git feldera-service
-cd feldera-service
-cd sql-to-dbsp-compiler && ./build.sh
-cd .. && cargo run --package=pipeline-manager --features pg-embed --bin pipeline-manager
-```
+The project is set up to deploy the server application to fly.io and the client application to github pages.
+There are three github action files in the `.github/workflows` directory for deploying the feldera pipeline,
+the server application and the client application.
 
-Make sure the `fda` tool is installed to deploy the SQL to the feldera instance:
+## Feldera
 
-```bash
-cd feldera
-export FELDERA_HOST=http://localhost:3000
-export FELDERA_API_KEY=
-bash deploy.sh
-```
+Make sure to set the `FELDERA_API_KEY` and `FELDERA_HOST` secrets in the github repository settings.
 
-Once all three components are running:
+## Server
 
-- Open [http://localhost:7777](http://localhost:7777) with your browser to see the spreadsheet.
-- Open [http://localhost:8080](http://localhost:8080) with your browser to see the feldera instance.
-- Open [http://localhost:3000/api/spreadsheet](http://localhost:3000/api/spreadsheet), or
-  [http://localhost:3000/api/stats](http://localhost:3000/api/cellstream) to issue API calls.
+Get a fly.io account and install the [fly CLI tool](https://fly.io/docs/flyctl/install/).
 
-## Deployment
-
-- The `server` application is deployed to fly.io it includes and serves the web-assembly artefact built under `client`.
-- The `feldera` instance is deployed to run from `try.feldera.com`. An API key is added to the server application
-  to access this instance.
+Next make sure to set the `FELDERA_API_KEY` and `FELDERA_HOST` secrets also in your fly.io application.
 
 ```bash
-fly secrets set FELDERA_API_KEY=apikey:...
+cd server
+fly login
 fly secrets set FELDERA_HOST=https://try.feldera.com
+fly secrets set FELDERA_API_KEY=apikey:...
 ```
+
+Finally, you'll need to get an API token from fly.io and set it as a secret named `FLY_API_TOKEN` in the github
+repository settings.
+
+## Client
+
+Make sure to set the `API_HOST` secret in the github repository settings to point to your fly.io application URL.
+Enable github pages, set the source to `Github Actions`. Then adjust the `public_url` env variable in the `client.yml`
+github action file to point to your github pages URL.
