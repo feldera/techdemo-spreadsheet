@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'client/**'
+      - '.github/workflows/client.yml'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
 
 permissions:
   contents: write
@@ -37,7 +42,7 @@ jobs:
         # relatively as eframe_template/favicon.ico. if we skip public-url option, the href paths will instead request username.github.io/favicon.ico which
         # will obviously return error 404 not found.
         run: ./trunk build --release --public-url $public_url --config client/Trunk.toml
-      - name: Upload docs
+      - name: Upload WASM build artifact
         uses: actions/upload-pages-artifact@v1
         with:
           path: client/dist
