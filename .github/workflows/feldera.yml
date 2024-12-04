@@ -1,0 +1,32 @@
+name: Deploy Feldera Program in Feldera Cloud
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'feldera/**'
+      - '.github/workflows/feldera.yml'
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-github-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # repo checkout
+      - name: Setup rust toolchain
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup set profile minimal
+      - name: Rust Cache # cache the rust build artefacts
+        uses: Swatinem/rust-cache@v2
+      - name: Download and install fda binary
+        run: cargo install fda
+      # Make sure FELDERA_API_KEY and FELDERA_HOST are set in the repository secrets
+      - name: Deploy Feldera Pipeline
+        run: cd feldera && bash deploy.sh
