@@ -5,7 +5,7 @@ use std::sync::Arc;
 use egui::color_picker::Alpha;
 use egui::mutex::RwLock;
 use egui::special_emojis::GITHUB;
-use egui::{Color32, Key, OpenUrl, Pos2, Rect, RichText, ScrollArea, Sense, Vec2};
+use egui::{Color32, Key, OpenUrl, Pos2, Rect, RichText, ScrollArea, Sense, Vec2, Window};
 use egui_extras::{Column, TableBuilder};
 use ewebsock::{WsEvent, WsMessage, WsReceiver};
 use log::{error, trace};
@@ -13,6 +13,7 @@ use serde_json::Deserializer;
 
 use crate::cell_cache::{Cell, CellCache, Loader};
 use crate::http::streaming_request;
+use crate::reference::ReferenceWindow;
 
 #[derive(serde::Deserialize, Default, Debug, Clone)]
 pub struct Stats {
@@ -35,6 +36,7 @@ pub struct SpreadsheetApp {
     stats: Arc<RwLock<Stats>>,
     cell_cache: CellCache,
     editing_cell: Option<u64>,
+    reference_open: bool,
 }
 
 impl SpreadsheetApp {
@@ -94,6 +96,7 @@ impl SpreadsheetApp {
             ws_receiver,
             cell_cache: CellCache::new(loader, Self::DEFAULT_COLS, Self::DEFAULT_ROWS),
             editing_cell: None,
+            reference_open: false,
         }
     }
 }
@@ -134,15 +137,24 @@ impl eframe::App for SpreadsheetApp {
 
             egui::menu::bar(ui, |ui| {
                 egui::widgets::global_theme_preference_buttons(ui);
-                if ui.button("Read The Blog Post").clicked() {
+                if ui.button("📖 Read The Blog Post").clicked() {
                     ctx.output_mut(|o| o.open_url = Some(OpenUrl::new_tab("https://feldera.com")));
                 }
-                if ui.button(format!("Fork me on Github {GITHUB}")).clicked() {
+                if ui.button(format!("{GITHUB} Fork me on Github")).clicked() {
                     ctx.output_mut(|o| {
                         o.open_url = Some(OpenUrl::new_tab(
                             "https://github.com/feldera/techdemo-spreadsheet",
                         ))
                     });
+                }
+                Window::new("Formula Reference")
+                    .open(&mut self.reference_open)
+                    .show(ctx, |ui| {
+                        let mut rw = ReferenceWindow {};
+                        rw.ui(ui);
+                    });
+                if ui.button("？ Formula Help").clicked() {
+                    self.reference_open = true;
                 }
             });
         });
@@ -185,7 +197,7 @@ impl eframe::App for SpreadsheetApp {
 
                         // Meter for total filled cells
                         ui.vertical(|ui| {
-                            ui.label(RichText::new("Total Filled Cells:").strong());
+                            ui.label(RichText::new("Cells With Content:").strong());
                             let max_cells = (SpreadsheetApp::DEFAULT_COLS as u64
                                 * SpreadsheetApp::DEFAULT_ROWS as u64)
                                 as f64;
@@ -210,17 +222,17 @@ impl eframe::App for SpreadsheetApp {
                         ui.separator();
 
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("Cells Filled This Hour: ").strong());
+                            ui.label(RichText::new("Cells Edited This Hour: ").strong());
                             ui.label(format!("{}", stats.filled_this_hour));
                         });
 
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("Cells Filled Today: ").strong());
+                            ui.label(RichText::new("Cells Edited Today: ").strong());
                             ui.label(format!("{}", stats.filled_today));
                         });
 
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new("Cells Filled This Week: ").strong());
+                            ui.label(RichText::new("Cells Edited This Week: ").strong());
                             ui.label(format!("{}", stats.filled_this_week));
                         });
                     });
@@ -239,7 +251,7 @@ impl eframe::App for SpreadsheetApp {
                                             format!("{GITHUB} feldera"),
                                             "https://github.com/feldera/feldera",
                                         )
-                                        .open_in_new_tab(true),
+                                            .open_in_new_tab(true),
                                     );
                                     ui.add_space(10.0);
                                     ui.add(
@@ -247,7 +259,7 @@ impl eframe::App for SpreadsheetApp {
                                             format!("{GITHUB} axum"),
                                             "https://github.com/tokio-rs/axum",
                                         )
-                                        .open_in_new_tab(true),
+                                            .open_in_new_tab(true),
                                     );
                                     ui.add_space(10.0);
                                     ui.add(
@@ -255,7 +267,7 @@ impl eframe::App for SpreadsheetApp {
                                             format!("{GITHUB} egui"),
                                             "https://github.com/emilk/egui",
                                         )
-                                        .open_in_new_tab(true),
+                                            .open_in_new_tab(true),
                                     );
                                     ui.add_space(10.0);
                                     ui.add(
@@ -263,7 +275,7 @@ impl eframe::App for SpreadsheetApp {
                                             format!("{GITHUB} XLFormula Engine"),
                                             "https://github.com/jiradaherbst/XLFormula-Engine",
                                         )
-                                        .open_in_new_tab(true),
+                                            .open_in_new_tab(true),
                                     );
                                     ui.add_space(10.0);
                                 });
@@ -276,13 +288,28 @@ impl eframe::App for SpreadsheetApp {
             ui.add_space(20.0);
 
             ui.vertical(|ui| {
-                ui.label("Set Background Color");
+                ui.horizontal(|ui| {
+                    let original_spacing = {
+                        let style = ui.style_mut();
+                        let original_spacing = style.spacing.item_spacing;
+                        style.spacing.item_spacing.x = 2.0;
+                        original_spacing
+                    };
+
+                    ui.label("Set Background Color");
+                    ui.colored_label(Color32::LIGHT_BLUE, RichText::new("[?]")).on_hover_text(
+                        "By default colors are at 0 alpha (fully transparent).\nMove the bottom slider in the widget to decrease the transparency if yo want\nto set a color on a new transparent cell.",
+                    );
+                    let style = ui.style_mut();
+                    style.spacing.item_spacing = original_spacing;
+                });
+
                 let id = self.focused_row as u64 * self.num_cols as u64 + self.focused_col as u64;
                 let cell = self.cell_cache.get(id);
                 let color_response = egui::widgets::color_picker::color_edit_button_srgba(
                     ui,
                     &mut self.bg_color_picked,
-                    Alpha::OnlyBlend,
+                    Alpha::BlendOrAdditive,
                 );
                 if color_response.changed() {
                     cell.set_background(self.bg_color_picked);
@@ -366,7 +393,7 @@ impl eframe::App for SpreadsheetApp {
                                                         Key::Enter => {
                                                             self.focused_row = (self.focused_row
                                                                 + 1)
-                                                            .min(self.num_rows - 1);
+                                                                .min(self.num_rows - 1);
                                                             self.last_key_time = now;
                                                         }
                                                         Key::ArrowDown => {
@@ -443,9 +470,9 @@ impl eframe::App for SpreadsheetApp {
                                     // Edit the current cell
                                     if self.editing_cell.is_none()
                                         && (resp.double_clicked()
-                                            || cell_response.double_clicked()
-                                            || (resp.has_focus()
-                                                && ui.input(|i| i.key_pressed(Key::Enter))))
+                                        || cell_response.double_clicked()
+                                        || (resp.has_focus()
+                                        && ui.input(|i| i.key_pressed(Key::Enter))))
                                     {
                                         cell_response.request_focus();
                                         cell.edit();
