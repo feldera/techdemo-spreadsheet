@@ -1,20 +1,20 @@
 use std::cell::RefCell;
 use std::fmt::Display;
 use std::num::NonZeroUsize;
-use std::ops::{ Range};
+use std::ops::Range;
 use std::rc::Rc;
-use std::sync::{Arc};
-use std::sync::atomic::{AtomicBool, AtomicI32,  Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use egui::mutex::{Mutex, RwLock};
-use egui::{Color32, Label, Response, Sense, Ui};
 use egui::widgets::TextEdit;
-use lru::LruCache;
+use egui::{Color32, Label, Response, Sense, Ui};
 use ehttp::Request;
-use ewebsock::{WsMessage,  WsSender};
+use ewebsock::{WsMessage, WsSender};
 use log::{debug, trace, warn};
-use serde_json::{json};
+use lru::LruCache;
+use serde_json::json;
 
 use crate::debouncer::Debouncer;
 
@@ -45,7 +45,6 @@ impl From<&CellContent> for UpdateCellRequest {
     }
 }
 
-
 /// A Cell that we currently track as part of the spreadsheet.
 pub(crate) struct CellContent {
     pub(crate) id: u64,
@@ -54,7 +53,7 @@ pub(crate) struct CellContent {
     pub(crate) old_write_buffer: Mutex<String>,
     pub(crate) background: AtomicI32,
     pub(crate) is_editing: AtomicBool,
-    debounce_bg_change: Arc<Mutex<Debouncer>>,
+    debounce_bg_change: Rc<Mutex<Debouncer>>,
 }
 
 /// We convert Cells from the backend into CellContent that we can edit.
@@ -67,7 +66,7 @@ impl From<Cell> for CellContent {
             old_write_buffer: Mutex::new(cell.raw_value),
             is_editing: AtomicBool::new(false),
             background: AtomicI32::new(cell.background),
-            debounce_bg_change: Arc::new(Mutex::new(Debouncer::new())),
+            debounce_bg_change: Rc::new(Mutex::new(Debouncer::new())),
         }
     }
 }
@@ -82,7 +81,7 @@ impl CellContent {
             content: RwLock::new(String::new()),
             is_editing: AtomicBool::new(false),
             background: AtomicI32::new(i32::from_le_bytes(Color32::TRANSPARENT.to_array())),
-            debounce_bg_change: Arc::new(Mutex::new(Debouncer::new())),
+            debounce_bg_change: Rc::new(Mutex::new(Debouncer::new())),
         }
     }
 
@@ -120,11 +119,18 @@ impl CellContent {
     }
 
     pub(crate) fn set_background(&self, color: Color32) {
-        self.background.store(i32::from_le_bytes(color.to_array()), Ordering::Relaxed);
+        self.background
+            .store(i32::from_le_bytes(color.to_array()), Ordering::Relaxed);
         let mut debouncer = self.debounce_bg_change.lock();
         let cell_update = self.into();
         debouncer.debounce(Duration::from_millis(350), move || {
-            update_cell(format!("{}/api/spreadsheet", CellCache::API_HOST.unwrap_or_else(|| "http://localhost:3000")), cell_update);
+            update_cell(
+                format!(
+                    "{}/api/spreadsheet",
+                    CellCache::API_HOST.unwrap_or("http://localhost:3000")
+                ),
+                cell_update,
+            );
         });
     }
 
@@ -132,7 +138,13 @@ impl CellContent {
         let mut old_value = self.old_write_buffer.lock();
         let new_value = self.write_buffer.read();
         if *old_value != *new_value {
-            update_cell(format!("{}/api/spreadsheet", CellCache::API_HOST.unwrap_or_else(|| "http://localhost:3000")), self.into());
+            update_cell(
+                format!(
+                    "{}/api/spreadsheet",
+                    CellCache::API_HOST.unwrap_or("http://localhost:3000")
+                ),
+                self.into(),
+            );
             old_value.clear();
             old_value.push_str(&new_value);
         }
@@ -149,7 +161,6 @@ impl CellContent {
         }
     }
 }
-
 
 /// Sends a PATCH request to the server to update a cell.
 fn update_cell(url: String, data: UpdateCellRequest) {
@@ -191,7 +202,9 @@ impl Loader {
         }
 
         let mut sender = self.ws_sender.lock();
-        sender.send(WsMessage::Text(json!({"from": range.start, "to": range.end}).to_string()));
+        sender.send(WsMessage::Text(
+            json!({"from": range.start, "to": range.end}).to_string(),
+        ));
         true
     }
 }
@@ -203,7 +216,7 @@ impl Loader {
 ///   since it also prefetches cells around the current view to make scrolling smooth).
 /// - It debounces fetching of new rows to avoid fetching too many cells at once.
 pub(crate) struct CellCache {
-    cells: Arc<Mutex<LruCache<u64, Arc<CellContent>>>>,
+    cells: Rc<Mutex<LruCache<u64, Rc<CellContent>>>>,
     fetcher: Arc<Loader>,
     debouncer: Rc<RefCell<Debouncer>>,
     current_range: Option<Range<u64>>,
@@ -219,7 +232,7 @@ impl CellCache {
 
         Self {
             fetcher,
-            cells: Arc::new(Mutex::new(LruCache::new(lru_cache_size))),
+            cells: Rc::new(Mutex::new(LruCache::new(lru_cache_size))),
             debouncer: Rc::new(RefCell::new(Debouncer::new())),
             current_range: None,
             prefetch_before_after_id,
@@ -228,16 +241,16 @@ impl CellCache {
 
     pub fn set(&mut self, id: u64, c: CellContent) {
         let mut cells = self.cells.lock();
-        let _c = cells.push(id, Arc::new(c)).unwrap();
+        let _c = cells.push(id, Rc::new(c)).unwrap();
     }
 
-    pub fn get(&mut self, id: u64) -> Arc<CellContent> {
+    pub fn get(&mut self, id: u64) -> Rc<CellContent> {
         let mut cells = self.cells.lock();
 
         if let Some(c) = cells.get(&id) {
             c.clone()
         } else {
-            let c = Arc::new(CellContent::empty(id));
+            let c = Rc::new(CellContent::empty(id));
             cells.push(id, c.clone());
 
             if let Some(current_range) = &self.current_range {
@@ -255,12 +268,14 @@ impl CellCache {
             let fetcher = self.fetcher.clone();
 
             let debouncer_clone = self.debouncer.clone();
-            debouncer_clone.borrow_mut().debounce(Duration::from_millis(100), move || {
-                let mut max_retry = 10;
-                while !fetcher.fetch(current_range.clone()) && max_retry > 0 {
-                    max_retry -= 1;
-                }
-            });
+            debouncer_clone
+                .borrow_mut()
+                .debounce(Duration::from_millis(100), move || {
+                    let mut max_retry = 10;
+                    while !fetcher.fetch(current_range.clone()) && max_retry > 0 {
+                        max_retry -= 1;
+                    }
+                });
 
             c
         }

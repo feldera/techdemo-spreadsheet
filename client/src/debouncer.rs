@@ -21,5 +21,3 @@ impl Debouncer {
         self.timeout = Some(Timeout::new(delay.as_millis() as u32, callback));
     }
 }
-
-
