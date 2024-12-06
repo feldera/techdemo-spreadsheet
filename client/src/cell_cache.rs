@@ -241,7 +241,7 @@ impl CellCache {
 
     pub fn set(&mut self, id: u64, c: CellContent) {
         let mut cells = self.cells.lock();
-        let _c = cells.push(id, Rc::new(c)).unwrap();
+        cells.push(id, Rc::new(c));
     }
 
     pub fn get(&mut self, id: u64) -> Rc<CellContent> {
