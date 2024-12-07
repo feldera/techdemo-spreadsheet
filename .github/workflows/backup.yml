@@ -24,10 +24,10 @@ jobs:
 
       # Ensure the backup script is executable
       - name: Make backup script executable
-        run: chmod +x ./feldera/backup.sh
+        run: chmod +x ./backup/backup.sh
 
       # Run the backup script
       - name: Run backup script
         env:
           FELDERA_HOST: ${{ secrets.FELDERA_HOST }}
-        run: ./feldera/backup.sh
+        run: ./backup/backup.sh
