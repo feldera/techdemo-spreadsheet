@@ -1,0 +1,33 @@
+name: Hourly S3 Backup
+
+on:
+  schedule:
+    # Run every hour
+    - cron: "0 * * * *"
+
+jobs:
+  backup:
+    runs-on: [ self-hosted, skylake40 ]
+
+    steps:
+      # Checkout the repository to get access to the backup script
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Set up AWS CLI
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Ensure the backup script is executable
+      - name: Make backup script executable
+        run: chmod +x ./feldera/backup.sh
+
+      # Run the backup script
+      - name: Run backup script
+        env:
+          FELDERA_HOST: ${{ secrets.FELDERA_HOST }}
+        run: ./feldera/backup.sh
