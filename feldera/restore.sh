@@ -1,4 +1,5 @@
 #!/bin/bash
+set -ex
 
 FILE_PATH="/tmp/spreadsheet_data_restore.parquet"
 BUCKET_NAME="spreadsheet-backups"

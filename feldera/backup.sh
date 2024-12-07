@@ -1,7 +1,8 @@
+set -ex
 FILE_PATH="/tmp/spreadsheet_data.parquet"
 BUCKET_NAME="spreadsheet-backups"
 
-curl -L "${FELDERA_HOST}/v0/pipelines/xls/query?sql=SELECT%20*%20FROM%20spreadsheet_data%3B&format=parquet" > $FILE_PATH
+curl -L "${FELDERA_HOST}/v0/pipelines/xls/query?sql=SELECT%20*%20FROM%20spreadsheet_data%3B&format=parquet" -H "Authorization: Bearer ${FELDERA_API_KEY}" > ${FILE_PATH}
 TIMESTAMP=$(date -u +"%Y%m%d%H%M%S")
 
 # Extract the base filename and append the timestamp
