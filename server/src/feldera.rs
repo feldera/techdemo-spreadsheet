@@ -176,9 +176,16 @@ pub(crate) async fn insert<T: Serialize>(table_name: &str, data: T) -> (StatusCo
         Ok(resp) if resp.status().is_success() => {
             (StatusCode::OK, Json(serde_json::json!({"success": true})))
         }
-        _ => (
+        Ok(resp) => {
+            let body = resp.text().await.unwrap_or_else(|e| e.to_string());
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": body})),
+            )
+        }
+        Err(e) => (
             StatusCode::INTERNAL_SERVER_ERROR,
-            Json(serde_json::json!({"error": "Failed to update cell"})),
+            Json(serde_json::json!({"error": format!("Failed to update cell: {:?}", e)})),
         ),
     }
 }
