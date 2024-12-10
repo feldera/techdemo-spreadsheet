@@ -156,13 +156,14 @@ pub(crate) fn subscribe_change_stream(
     subscribe
 }
 
-pub(crate) async fn insert<T: Serialize>(table_name: &str, data: T) -> (StatusCode, Json<Value>) {
-    let client = Client::new();
+pub(crate) async fn insert<T: Serialize>(client: &Client, table_name: &str, data: T) -> (StatusCode, Json<Value>) {
     let url = format!(
         "{}/v0/pipelines/{PIPELINE_NAME}/ingress/{table_name}",
         &*FELDERA_HOST
     );
+    let url = "http://localhost:39915/ingress/spreadsheet_data";
 
+    let start = tokio::time::Instant::now();
     let response = client
         .post(url.clone())
         .bearer_auth(&*FELDERA_API_KEY)
@@ -171,6 +172,7 @@ pub(crate) async fn insert<T: Serialize>(table_name: &str, data: T) -> (StatusCo
         .json(&data)
         .send()
         .await;
+    log::info!("Request sent in {:?}", start.elapsed());
 
     match response {
         Ok(resp) if resp.status().is_success() => {

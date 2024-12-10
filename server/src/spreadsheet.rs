@@ -256,5 +256,5 @@ pub(crate) async fn post_handler(
         ts: Utc::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
     };
 
-    insert("spreadsheet_data", payload).await
+    insert(&state.client,"spreadsheet_data", payload).await
 }

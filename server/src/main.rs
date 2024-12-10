@@ -2,6 +2,7 @@ use axum::{routing::get, routing::post, Router};
 use dashmap::DashSet;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use reqwest::Client;
 use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
 
@@ -12,6 +13,7 @@ mod spreadsheet;
 mod stats;
 #[derive(Clone)]
 struct AppState {
+    client: Client,
     stats_subscription: Sender<Result<String, XlsError>>,
     xls_subscription: Sender<Result<String, XlsError>>,
     api_limits: Arc<DashSet<String>>,
@@ -26,6 +28,7 @@ async fn main() {
     let api_limits = feldera::api_limit_table();
 
     let state = AppState {
+        client: Client::new(),
         stats_subscription,
         xls_subscription,
         api_limits,

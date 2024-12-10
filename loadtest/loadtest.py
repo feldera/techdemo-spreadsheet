@@ -1,3 +1,4 @@
+import sys
 import time
 import random
 from pip._vendor import requests
@@ -82,7 +83,32 @@ def lambda_handler(event, context):
             time.sleep(interval)
 
     return {
-        "status": "success",
         "requests_made": len(responses),
         "responses": responses,
     }
+
+if __name__ == '__main__':
+    # Test the lambda function handler
+    event = {
+        "url": "http://localhost:3000/api/spreadsheet",
+        "duration": 10,
+        "interval": 0,
+        "cell_start": 0,
+        "cell_end": 10000,
+    }
+    result = lambda_handler(event, None)
+    found_error = False
+    for response in result["responses"]:
+        if "error" in response:
+            print(response["error"])
+            found_error = True
+        if response["status_code"] != 200:
+            print(f"Status code: {response['status_code']}")
+            print(response["body"])
+            found_error = True
+    if not found_error:
+        total_requests = result["requests_made"]
+        print(f"Total requests made: {total_requests}")
+        sys.exit(0)
+    else:
+        sys.exit(1)
