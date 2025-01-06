@@ -41,7 +41,7 @@ def lambda_handler(event, context):
 
     Event structure:
     {
-        "url": "https://localhost:3000/api/spreadsheet",
+        "url": "http://localhost:3000/api/spreadsheet",
         "duration": 10, # Duration of load-test in seconds
         "interval": 0.1 # Time between requests in seconds
         cell_start: 0, # Start cell id for range
@@ -64,25 +64,35 @@ def lambda_handler(event, context):
     start_time = time.time()
     responses = []
 
-    # Perform POST requests in a loop for the given duration
-    while time.time() - start_time < duration:
-        try:
-            data = generate_random_value()
-            cell = make_cell(random.randint(cell_start, cell_end), data, random.randint(0, 16777215))
+    with requests.Session() as session:
+        # Perform POST requests in a loop for the given duration
+        while time.time() - start_time < duration:
+            try:
+                data = generate_random_value()
+                cell = make_cell(random.randint(cell_start, cell_end), data, random.randint(0, 16777215))
 
-            response = requests.post(url, json=cell, headers=headers)
-            responses.append({
-                "status_code": response.status_code,
-                "body": response.text,
-            })
-        except requests.RequestException as e:
-            responses.append({"error": str(e)})
+                response = session.post(url, json=cell, headers=headers)
+                responses.append({
+                    "status_code": response.status_code,
+                    "body": response.text,
+                })
+            except requests.RequestException as e:
+                responses.append({"error": str(e)})
 
-        if interval > 0:
-            time.sleep(interval)
+            if interval > 0:
+                time.sleep(interval)
 
     return {
         "status": "success",
         "requests_made": len(responses),
         "responses": responses,
     }
+
+if __name__ == '__main__':
+    print(lambda_handler({
+        "url": "http://localhost:3000/api/spreadsheet",
+        "duration": 10,
+        "cell_start": 0,
+        "cell_end": 1000,
+        "interval": 0
+    }, None))

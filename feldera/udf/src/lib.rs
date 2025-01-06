@@ -119,6 +119,7 @@ mod tests {
         assert_eq!(id_to_cell_reference(100*26 + 25), "Z100".to_string());
         assert_eq!(id_to_cell_reference(100*26 + 25), "Z100".to_string());
         assert_eq!(id_to_cell_reference(260000025), "Z10000000".to_string());
+        assert_eq!(id_to_cell_reference(1_040_000_000-1), "Z39999999".to_string());
     }
 
     #[test]
