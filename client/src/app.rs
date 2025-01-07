@@ -322,7 +322,7 @@ impl eframe::App for SpreadsheetApp {
                     .resizable(true)
                     .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
                     .column(Column::remainder())
-                    .columns(Column::remainder().at_least(100.0), self.num_cols)
+                    .columns(Column::initial(100.0).at_least(25.0).resizable(true).clip(true), self.num_cols)
                     .header(Self::DEFAULT_ROW_HEIGHT + 3.0, |mut header| {
                         let col_idx_to_label = |idx: usize| {
                             if idx < 26 {
