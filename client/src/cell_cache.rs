@@ -221,7 +221,7 @@ pub(crate) struct CellCache {
     debouncer: Rc<RefCell<Debouncer>>,
     current_range: Option<Range<u64>>,
     prefetch_before_after_id: u64,
-    max_cells: usize
+    max_cells: usize,
 }
 
 impl CellCache {
@@ -263,7 +263,10 @@ impl CellCache {
             }
 
             let start = id.saturating_sub(self.prefetch_before_after_id);
-            let end = std::cmp::min(id.saturating_add(self.prefetch_before_after_id), self.max_cells as u64);
+            let end = std::cmp::min(
+                id.saturating_add(self.prefetch_before_after_id),
+                self.max_cells as u64,
+            );
             let current_range = start..end;
             self.current_range = Some(current_range.clone());
             trace!("fetching range: {:?}", current_range);
