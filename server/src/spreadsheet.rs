@@ -11,7 +11,9 @@ use axum::http::HeaderMap;
 use chrono::Utc;
 use futures::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, trace, warn};
+use regex::Regex;
 use reqwest::Client;
+use rustrict::Censor;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast::Receiver, mpsc, watch, RwLock};
 
@@ -314,6 +316,21 @@ struct UpdatePayload {
     ts: String,
 }
 
+fn replace_domain_in_urls(input: &str, new_domain: &str) -> String {
+    // Regex breakdown:
+    // (https?://) captures the protocol (http or https)
+    // ([^/\s]+) captures the domain portion (everything until a slash or whitespace)
+    // ([^\s]*) captures the remainder of the URL (path/query/etc. until whitespace)
+    let url_regex = Regex::new(r"(https?://)([^/\s]+)([^\s]*)").unwrap();
+
+    url_regex
+        .replace_all(input, |caps: &regex::Captures| {
+            // caps[1] is the scheme+://, caps[2] is the original domain, caps[3] is the path/query
+            format!("{}{}{}", &caps[1], new_domain, &caps[3])
+        })
+        .to_string()
+}
+
 pub(crate) async fn post_handler(
     headers: HeaderMap,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
@@ -338,10 +355,12 @@ pub(crate) async fn post_handler(
             Json(serde_json::json!({"error": "Invalid cell ID"})),
         );
     }
-    let raw_value = update_request.raw_value.chars().take(64).collect::<String>();
+    let user_value = update_request.raw_value.chars().take(64).collect::<String>();
+    let censored_urls = replace_domain_in_urls(&user_value, "*REDACTED*");
+    let censored_input = Censor::new(censored_urls.chars()).censor();
     let payload = UpdatePayload {
         id: update_request.id,
-        raw_value,
+        raw_value: censored_input,
         background: update_request.background,
         ip: client_ip,
         ts: Utc::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),

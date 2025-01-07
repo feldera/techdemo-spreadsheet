@@ -19,3 +19,5 @@ env_logger = "0.11.5"
 chrono = "0.4.38"
 dashmap = "6.1.0"
 tower-http = { version = "0.6.2", features = ["cors"] }
+rustrict = "0.7.33"
+regex = "1.10.2"
