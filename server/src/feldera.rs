@@ -5,6 +5,7 @@ use std::io;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
+use crate::stats::XlsError;
 use axum::http::StatusCode;
 use axum::Json;
 use dashmap::DashSet;
@@ -14,7 +15,6 @@ use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::broadcast::Sender;
-use crate::stats::XlsError;
 
 const PIPELINE_NAME: &str = "xls";
 const FELDERA_HOST: LazyLock<String> =
@@ -154,7 +154,11 @@ pub(crate) fn subscribe_change_stream(
     subscribe
 }
 
-pub(crate) async fn insert<T: Serialize>(client: Client, table_name: &str, data: T) -> (StatusCode, Json<Value>) {
+pub(crate) async fn insert<T: Serialize>(
+    client: Client,
+    table_name: &str,
+    data: T,
+) -> (StatusCode, Json<Value>) {
     let url = format!(
         "{}/v0/pipelines/{PIPELINE_NAME}/ingress/{table_name}",
         &*FELDERA_HOST
@@ -322,4 +326,3 @@ pub(crate) fn api_limit_table(client: Client) -> Arc<DashSet<String>> {
 
     ds_clone
 }
-

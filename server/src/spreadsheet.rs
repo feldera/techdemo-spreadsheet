@@ -1,13 +1,9 @@
-use std::collections::BTreeMap;
-use std::net::SocketAddr;
-use std::ops::{ControlFlow, Range};
-use std::sync::Arc;
+use axum::http::HeaderMap;
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::{connect_info::ConnectInfo, Json, State},
     response::IntoResponse,
 };
-use axum::http::HeaderMap;
 use chrono::Utc;
 use futures::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, trace, warn};
@@ -15,37 +11,45 @@ use regex::Regex;
 use reqwest::Client;
 use rustrict::Censor;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::net::SocketAddr;
+use std::ops::{ControlFlow, Range};
+use std::sync::Arc;
 use tokio::sync::{broadcast::Receiver, mpsc, watch, RwLock};
 
-use crate::feldera::{insert, adhoc_query};
+use crate::feldera::{adhoc_query, insert};
 use crate::stats::XlsError;
 use crate::AppState;
 
 pub(crate) struct SpreadSheetView {
     client: Client,
-    cells: Arc<RwLock<BTreeMap<i64, Cell>>>
+    cells: Arc<RwLock<BTreeMap<i64, Cell>>>,
 }
 
 impl SpreadSheetView {
     const CACHE_FRONT: Range<i64> = 0..100_000;
     const CACHE_BACK: Range<i64> = 1_039_900_000..1_040_000_000;
 
-    pub(crate) async fn new(client: Client, xls_subscription: Receiver<Result<String, XlsError>>) -> Self {
+    pub(crate) async fn new(
+        client: Client,
+        xls_subscription: Receiver<Result<String, XlsError>>,
+    ) -> Self {
         let cells = Arc::new(RwLock::new(BTreeMap::new()));
         Self::spawn_update_cache_task(xls_subscription, cells.clone());
         Self::initialize_cache(client.clone(), cells.clone(), Self::CACHE_FRONT).await;
         Self::initialize_cache(client.clone(), cells.clone(), Self::CACHE_BACK).await;
-        SpreadSheetView {
-            client,
-            cells
-        }
+        SpreadSheetView { client, cells }
     }
 
     fn id_is_cached(id: i64) -> bool {
         Self::CACHE_FRONT.contains(&id) || Self::CACHE_BACK.contains(&id)
     }
 
-    async fn initialize_cache(client: Client, cells: Arc<RwLock<BTreeMap<i64, Cell>>>, range: Range<i64>) {
+    async fn initialize_cache(
+        client: Client,
+        cells: Arc<RwLock<BTreeMap<i64, Cell>>>,
+        range: Range<i64>,
+    ) {
         let sql = format!(
             "SELECT * FROM spreadsheet_view WHERE id >= {} and id < {}",
             range.start, range.end
@@ -72,7 +76,10 @@ impl SpreadSheetView {
         }
     }
 
-    fn spawn_update_cache_task(mut xls_subscription: Receiver<Result<String, XlsError>>, cells: Arc<RwLock<BTreeMap<i64, Cell>>>) {
+    fn spawn_update_cache_task(
+        mut xls_subscription: Receiver<Result<String, XlsError>>,
+        cells: Arc<RwLock<BTreeMap<i64, Cell>>>,
+    ) {
         tokio::spawn(async move {
             loop {
                 match xls_subscription.recv().await {
@@ -148,7 +155,14 @@ pub(crate) async fn ws_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     debug!("{addr} connected.");
-    ws.on_upgrade(move |socket| handle_socket(state.spreadsheet_view.clone(), state.xls_subscription.subscribe(), socket, addr))
+    ws.on_upgrade(move |socket| {
+        handle_socket(
+            state.spreadsheet_view.clone(),
+            state.xls_subscription.subscribe(),
+            socket,
+            addr,
+        )
+    })
 }
 
 /// Actual websocket state-machine (one will be spawned per connection)
@@ -219,28 +233,24 @@ async fn handle_socket(
         while let Some(Ok(msg)) = receiver.next().await {
             cnt += 1;
             match process_message(msg, who) {
-                ControlFlow::Continue(Some(region)) => {
-                    match spreadsheet_view.query(region)
-                    .await
-                    {
-                        Ok(snapshot) => {
-                            region_tx.send_replace(region);
-                            for line in snapshot.split('\n') {
-                                match change_fwder.send(line.to_string()).await {
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        warn!("Error sending change to sender task: {e}");
-                                        return cnt;
-                                    }
+                ControlFlow::Continue(Some(region)) => match spreadsheet_view.query(region).await {
+                    Ok(snapshot) => {
+                        region_tx.send_replace(region);
+                        for line in snapshot.split('\n') {
+                            match change_fwder.send(line.to_string()).await {
+                                Ok(_) => {}
+                                Err(e) => {
+                                    warn!("Error sending change to sender task: {e}");
+                                    return cnt;
                                 }
                             }
                         }
-                        Err(e) => {
-                            warn!("Error querying spreadsheet_view: {e}");
-                            return cnt;
-                        }
                     }
-                }
+                    Err(e) => {
+                        warn!("Error querying spreadsheet_view: {e}");
+                        return cnt;
+                    }
+                },
                 ControlFlow::Continue(None) => {}
                 ControlFlow::Break(_) => {
                     break;
@@ -339,9 +349,15 @@ pub(crate) async fn post_handler(
 ) -> impl IntoResponse {
     // Load balancer puts the client IP in the HTTP header
     const CLIENT_IP_HEADER: &str = "Fly-Client-IP";
-    let client_ip = headers.get(CLIENT_IP_HEADER).map(|ip| {
-        String::from_utf8_lossy(ip.as_bytes()).chars().take(45).collect::<String>()
-    }).unwrap_or(addr.ip().to_string().chars().take(45).collect::<String>());
+    let client_ip = headers
+        .get(CLIENT_IP_HEADER)
+        .map(|ip| {
+            String::from_utf8_lossy(ip.as_bytes())
+                .chars()
+                .take(45)
+                .collect::<String>()
+        })
+        .unwrap_or(addr.ip().to_string().chars().take(45).collect::<String>());
 
     if state.api_limits.contains(&client_ip) {
         return (
@@ -355,7 +371,11 @@ pub(crate) async fn post_handler(
             Json(serde_json::json!({"error": "Invalid cell ID"})),
         );
     }
-    let user_value = update_request.raw_value.chars().take(64).collect::<String>();
+    let user_value = update_request
+        .raw_value
+        .chars()
+        .take(64)
+        .collect::<String>();
     let censored_urls = replace_domain_in_urls(&user_value, "*REDACTED*");
     let censored_input = Censor::new(censored_urls.chars()).censor();
     let payload = UpdatePayload {
