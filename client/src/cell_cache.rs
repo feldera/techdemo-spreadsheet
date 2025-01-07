@@ -221,12 +221,13 @@ pub(crate) struct CellCache {
     debouncer: Rc<RefCell<Debouncer>>,
     current_range: Option<Range<u64>>,
     prefetch_before_after_id: u64,
+    max_cells: usize
 }
 
 impl CellCache {
     pub(crate) const API_HOST: Option<&'static str> = option_env!("API_HOST");
 
-    pub fn new(fetcher: Arc<Loader>, width: usize, _height: usize) -> Self {
+    pub fn new(fetcher: Arc<Loader>, width: usize, height: usize) -> Self {
         let prefetch_before_after_id = 100 * width as u64;
         let lru_cache_size = NonZeroUsize::new(200 * width).unwrap();
 
@@ -236,6 +237,7 @@ impl CellCache {
             debouncer: Rc::new(RefCell::new(Debouncer::new())),
             current_range: None,
             prefetch_before_after_id,
+            max_cells: width * height,
         }
     }
 
@@ -261,7 +263,7 @@ impl CellCache {
             }
 
             let start = id.saturating_sub(self.prefetch_before_after_id);
-            let end = id.saturating_add(self.prefetch_before_after_id);
+            let end = std::cmp::min(id.saturating_add(self.prefetch_before_after_id), self.max_cells as u64);
             let current_range = start..end;
             self.current_range = Some(current_range.clone());
             trace!("fetching range: {:?}", current_range);

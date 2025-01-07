@@ -138,7 +138,7 @@ impl eframe::App for SpreadsheetApp {
             egui::menu::bar(ui, |ui| {
                 egui::widgets::global_theme_preference_buttons(ui);
                 if ui.button("📖 Read The Blog Post").clicked() {
-                    ctx.output_mut(|o| o.open_url = Some(OpenUrl::new_tab("https://feldera.com")));
+                    ctx.output_mut(|o| o.open_url = Some(OpenUrl::new_tab("https://docs.feldera.com/use_cases/real_time_apps/part1")));
                 }
                 if ui.button(format!("{GITHUB} Fork me on Github")).clicked() {
                     ctx.output_mut(|o| {

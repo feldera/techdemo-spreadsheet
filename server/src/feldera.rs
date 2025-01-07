@@ -14,7 +14,6 @@ use reqwest::Client;
 use serde::Serialize;
 use serde_json::Value;
 use tokio::sync::broadcast::Sender;
-
 use crate::stats::XlsError;
 
 const PIPELINE_NAME: &str = "xls";
@@ -204,13 +203,16 @@ pub(crate) fn api_limit_table(client: Client) -> Arc<DashSet<String>> {
     tokio::spawn(async move {
         loop {
             ds.clear();
-            let snapshot = adhoc_query(client.clone(),"SELECT * FROM api_limit_reached")
+            let snapshot = adhoc_query(client.clone(), "SELECT * FROM api_limit_reached")
                 .await
                 .unwrap_or_else(|e| {
                     error!("Failed to fetch initial api_limit data: {}", e);
                     String::new()
                 });
-            for line in snapshot.lines() {
+            for line in snapshot.trim().lines() {
+                if line.is_empty() {
+                    continue;
+                }
                 match serde_json::from_str::<ApiLimitRecord>(line) {
                     Ok(record) => {
                         log::debug!("Initial api limit: {record:?}");
@@ -320,3 +322,4 @@ pub(crate) fn api_limit_table(client: Client) -> Arc<DashSet<String>> {
 
     ds_clone
 }
+

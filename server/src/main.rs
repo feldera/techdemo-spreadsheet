@@ -5,7 +5,7 @@ use std::sync::Arc;
 use reqwest::Client;
 use tokio::sync::broadcast::Sender;
 use tower_http::cors::CorsLayer;
-
+use crate::spreadsheet::SpreadSheetView;
 use crate::stats::XlsError;
 
 mod feldera;
@@ -15,6 +15,7 @@ mod stats;
 struct AppState {
     stats_subscription: Sender<Result<String, XlsError>>,
     xls_subscription: Sender<Result<String, XlsError>>,
+    spreadsheet_view: Arc<SpreadSheetView>,
     api_limits: Arc<DashSet<String>>,
     http_client: Client,
 }
@@ -27,10 +28,12 @@ async fn main() {
     let stats_subscription = feldera::subscribe_change_stream(http_client.clone(), "spreadsheet_statistics", 128);
     let xls_subscription = feldera::subscribe_change_stream(http_client.clone(), "spreadsheet_view", 4096);
     let api_limits = feldera::api_limit_table(http_client.clone());
+    let spreadsheet_view = Arc::new(SpreadSheetView::new(http_client.clone(), xls_subscription.subscribe()).await);
 
     let state = AppState {
         stats_subscription,
         xls_subscription,
+        spreadsheet_view,
         api_limits,
         http_client,
     };

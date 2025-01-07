@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::ops::{ControlFlow, Range};
-
+use std::sync::Arc;
 use axum::{
     extract::ws::{Message, WebSocket, WebSocketUpgrade},
     extract::{connect_info::ConnectInfo, Json, State},
@@ -12,13 +13,108 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, trace, warn};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use tokio::sync::{broadcast::Receiver, mpsc, watch};
+use tokio::sync::{broadcast::Receiver, mpsc, watch, RwLock};
 
-use crate::feldera::{adhoc_query, insert};
+use crate::feldera::{insert, adhoc_query};
 use crate::stats::XlsError;
 use crate::AppState;
 
-#[derive(serde::Deserialize, Debug)]
+pub(crate) struct SpreadSheetView {
+    client: Client,
+    cells: Arc<RwLock<BTreeMap<i64, Cell>>>
+}
+
+impl SpreadSheetView {
+    const CACHE_FRONT: Range<i64> = 0..100_000;
+    const CACHE_BACK: Range<i64> = 1_039_900_000..1_040_000_000;
+
+    pub(crate) async fn new(client: Client, xls_subscription: Receiver<Result<String, XlsError>>) -> Self {
+        let cells = Arc::new(RwLock::new(BTreeMap::new()));
+        Self::spawn_update_cache_task(xls_subscription, cells.clone());
+        Self::initialize_cache(client.clone(), cells.clone(), Self::CACHE_FRONT).await;
+        Self::initialize_cache(client.clone(), cells.clone(), Self::CACHE_BACK).await;
+        SpreadSheetView {
+            client,
+            cells
+        }
+    }
+
+    fn id_is_cached(id: i64) -> bool {
+        Self::CACHE_FRONT.contains(&id) || Self::CACHE_BACK.contains(&id)
+    }
+
+    async fn initialize_cache(client: Client, cells: Arc<RwLock<BTreeMap<i64, Cell>>>, range: Range<i64>) {
+        let sql = format!(
+            "SELECT * FROM spreadsheet_view WHERE id >= {} and id < {}",
+            range.start, range.end
+        );
+        match adhoc_query(client, sql.as_str()).await {
+            Ok(snapshot) => {
+                for line in snapshot.trim().split('\n') {
+                    if line.is_empty() {
+                        continue;
+                    }
+                    match serde_json::from_str::<Cell>(&line) {
+                        Ok(cell) => {
+                            cells.write().await.insert(cell.id, cell);
+                        }
+                        Err(e) => {
+                            warn!("Error parsing change: {e} (change {line})");
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                panic!("Error filling spreadsheet cache: {e}");
+            }
+        }
+    }
+
+    fn spawn_update_cache_task(mut xls_subscription: Receiver<Result<String, XlsError>>, cells: Arc<RwLock<BTreeMap<i64, Cell>>>) {
+        tokio::spawn(async move {
+            loop {
+                match xls_subscription.recv().await {
+                    Ok(Ok(change)) => match serde_json::from_str::<Cell>(&change) {
+                        Ok(cell) => {
+                            if Self::id_is_cached(cell.id) {
+                                cells.write().await.insert(cell.id, cell);
+                            }
+                        }
+                        Err(e) => {
+                            error!("Error parsing change: {e} (change {change})");
+                        }
+                    },
+                    Ok(Err(e)) => {
+                        warn!("Error receiving change: {e}");
+                    }
+                    Err(e) => {
+                        warn!("Error receiving change: {e}");
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    async fn query(&self, region: Region) -> Result<String, XlsError> {
+        if Self::id_is_cached(region.from) && Self::id_is_cached(region.to - 1) {
+            let mut snapshot = String::new();
+            for (_id, cell) in self.cells.read().await.range(region.from..region.to) {
+                snapshot.push_str(&serde_json::to_string(cell).unwrap());
+                snapshot.push('\n');
+            }
+            return Ok(snapshot);
+        }
+
+        let sql = format!(
+            "SELECT * FROM spreadsheet_view WHERE id >= {} and id < {}",
+            region.from, region.to
+        );
+        adhoc_query(self.client.clone(), sql.as_str()).await
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
 #[allow(dead_code)]
 struct Cell {
     id: i64,
@@ -50,12 +146,12 @@ pub(crate) async fn ws_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     debug!("{addr} connected.");
-    ws.on_upgrade(move |socket| handle_socket(state.http_client.clone(), state.xls_subscription.subscribe(), socket, addr))
+    ws.on_upgrade(move |socket| handle_socket(state.spreadsheet_view.clone(), state.xls_subscription.subscribe(), socket, addr))
 }
 
 /// Actual websocket state-machine (one will be spawned per connection)
 async fn handle_socket(
-    client: Client,
+    spreadsheet_view: Arc<SpreadSheetView>,
     mut xls_changes: Receiver<Result<String, XlsError>>,
     socket: WebSocket,
     who: SocketAddr,
@@ -122,14 +218,7 @@ async fn handle_socket(
             cnt += 1;
             match process_message(msg, who) {
                 ControlFlow::Continue(Some(region)) => {
-                    match adhoc_query(
-                        client.clone(),
-                        format!(
-                            "SELECT * FROM spreadsheet_view WHERE id >= {} and id < {}",
-                            region.from, region.to
-                        )
-                        .as_str(),
-                    )
+                    match spreadsheet_view.query(region)
                     .await
                     {
                         Ok(snapshot) => {
@@ -250,7 +339,6 @@ pub(crate) async fn post_handler(
         );
     }
     let raw_value = update_request.raw_value.chars().take(64).collect::<String>();
-
     let payload = UpdatePayload {
         id: update_request.id,
         raw_value,
