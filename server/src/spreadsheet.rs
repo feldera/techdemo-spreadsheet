@@ -10,6 +10,7 @@ use axum::http::HeaderMap;
 use chrono::Utc;
 use futures::{sink::SinkExt, stream::StreamExt};
 use log::{debug, error, trace, warn};
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast::Receiver, mpsc, watch};
 
@@ -49,11 +50,12 @@ pub(crate) async fn ws_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     debug!("{addr} connected.");
-    ws.on_upgrade(move |socket| handle_socket(state.xls_subscription.subscribe(), socket, addr))
+    ws.on_upgrade(move |socket| handle_socket(state.http_client.clone(), state.xls_subscription.subscribe(), socket, addr))
 }
 
 /// Actual websocket state-machine (one will be spawned per connection)
 async fn handle_socket(
+    client: Client,
     mut xls_changes: Receiver<Result<String, XlsError>>,
     socket: WebSocket,
     who: SocketAddr,
@@ -121,6 +123,7 @@ async fn handle_socket(
             match process_message(msg, who) {
                 ControlFlow::Continue(Some(region)) => {
                     match adhoc_query(
+                        client.clone(),
                         format!(
                             "SELECT * FROM spreadsheet_view WHERE id >= {} and id < {}",
                             region.from, region.to
@@ -256,5 +259,5 @@ pub(crate) async fn post_handler(
         ts: Utc::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
     };
 
-    insert("spreadsheet_data", payload).await
+    insert(state.http_client, "spreadsheet_data", payload).await
 }

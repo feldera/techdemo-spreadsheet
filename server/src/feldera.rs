@@ -23,9 +23,8 @@ const FELDERA_HOST: LazyLock<String> =
 static FELDERA_API_KEY: LazyLock<String> =
     LazyLock::new(|| var("FELDERA_API_KEY").unwrap_or_else(|_| String::new()));
 
-pub(crate) async fn adhoc_query(sql: &str) -> Result<String, XlsError> {
+pub(crate) async fn adhoc_query(client: Client, sql: &str) -> Result<String, XlsError> {
     let url = format!("{}/v0/pipelines/{PIPELINE_NAME}/query", &*FELDERA_HOST);
-    let client = Client::new();
     let response = client
         .get(url)
         .bearer_auth(&*FELDERA_API_KEY)
@@ -68,12 +67,12 @@ struct Record {
 }
 
 pub(crate) fn subscribe_change_stream(
+    client: Client,
     view_name: &str,
     capacity: usize,
 ) -> Sender<Result<String, XlsError>> {
     let (tx, _) = tokio::sync::broadcast::channel(capacity);
     let subscribe = tx.clone();
-    let client = Client::new();
     let url = format!(
         "{}/v0/pipelines/{PIPELINE_NAME}/egress/{view_name}",
         &*FELDERA_HOST
@@ -156,8 +155,7 @@ pub(crate) fn subscribe_change_stream(
     subscribe
 }
 
-pub(crate) async fn insert<T: Serialize>(table_name: &str, data: T) -> (StatusCode, Json<Value>) {
-    let client = Client::new();
+pub(crate) async fn insert<T: Serialize>(client: Client, table_name: &str, data: T) -> (StatusCode, Json<Value>) {
     let url = format!(
         "{}/v0/pipelines/{PIPELINE_NAME}/ingress/{table_name}",
         &*FELDERA_HOST
@@ -195,10 +193,9 @@ struct ApiLimitRecord {
     ip: String,
 }
 
-pub(crate) fn api_limit_table() -> Arc<DashSet<String>> {
+pub(crate) fn api_limit_table(client: Client) -> Arc<DashSet<String>> {
     let ds = Arc::new(DashSet::new());
     let ds_clone = ds.clone();
-    let client = Client::new();
     let url = format!(
         "{}/v0/pipelines/{PIPELINE_NAME}/egress/api_limit_reached",
         &*FELDERA_HOST
@@ -207,7 +204,7 @@ pub(crate) fn api_limit_table() -> Arc<DashSet<String>> {
     tokio::spawn(async move {
         loop {
             ds.clear();
-            let snapshot = adhoc_query("SELECT * FROM api_limit_reached")
+            let snapshot = adhoc_query(client.clone(),"SELECT * FROM api_limit_reached")
                 .await
                 .unwrap_or_else(|e| {
                     error!("Failed to fetch initial api_limit data: {}", e);

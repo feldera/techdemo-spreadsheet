@@ -76,7 +76,7 @@ impl StdError for XlsError {
 }
 
 pub(crate) async fn stats(State(state): State<AppState>) -> impl IntoResponse {
-    let initial_data = adhoc_query("SELECT * FROM spreadsheet_statistics").await;
+    let initial_data = adhoc_query(state.http_client,"SELECT * FROM spreadsheet_statistics").await;
 
     if let Err(e) = initial_data {
         return Response::builder()

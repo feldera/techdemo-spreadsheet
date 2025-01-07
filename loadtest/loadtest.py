@@ -83,16 +83,21 @@ def lambda_handler(event, context):
                 time.sleep(interval)
 
     return {
-        "status": "success",
         "requests_made": len(responses),
         "responses": responses,
     }
 
 if __name__ == '__main__':
-    print(lambda_handler({
+    total = 0
+    resp = lambda_handler({
         "url": "http://localhost:3000/api/spreadsheet",
         "duration": 10,
         "cell_start": 0,
         "cell_end": 1000,
-        "interval": 0
-    }, None))
+        "interval": 0}, None)
+
+    failed = len(list(filter(lambda x: x["status_code"] != 200 or 'error' in x, resp["responses"])))
+    total += resp["requests_made"]
+    if failed > 0:
+        print(resp["responses"])
+    print("Total {} req completed ({} failures)".format(total, failed))
