@@ -45,6 +45,6 @@ jobs:
 
       # Restart the backend *this invalidates the cell cache just in case*
       - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: cd server && flyctl restart
+      - run: cd server && flyctl apps restart
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
