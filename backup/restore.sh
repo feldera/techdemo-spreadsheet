@@ -34,7 +34,8 @@ sleep 5
 echo "Inserting data back into Feldera"
 curl -X POST \
   --data-binary @$FILE_PATH \
-  "${FELDERA_HOST}/v0/pipelines/xls/ingress/spreadsheet_data?format=parquet"
+  "${FELDERA_HOST}/v0/pipelines/xls/ingress/spreadsheet_data?format=parquet" \
+  -H "Authorization: Bearer ${FELDERA_API_KEY}"
 
 # Verify the insertion
 if [[ $? -eq 0 ]]; then
