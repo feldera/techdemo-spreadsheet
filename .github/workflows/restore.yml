@@ -42,3 +42,9 @@ jobs:
           FELDERA_HOST: ${{ secrets.FELDERA_HOST }}
           FELDERA_API_KEY: ${{ secrets.FELDERA_API_KEY }}
         run: ./backup/restore.sh
+
+      # Restart the backend *this invalidates the cell cache just in case*
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: cd server && flyctl restart
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
