@@ -6,7 +6,7 @@ BUCKET_NAME="spreadsheet-backups"
 
 # Get the most recent file from the S3 bucket
 echo "Fetching the most recent backup file from s3://$BUCKET_NAME"
-LATEST_FILE=$(aws s3 ls "s3://$BUCKET_NAME/" | sort | tail -n 1 | awk '{print $4}')
+LATEST_FILE=$(aws s3 ls "s3://$BUCKET_NAME/" | sort -r | tail -n 1 | awk '{print $4}')
 
 # Check if a file was found
 if [[ -z "$LATEST_FILE" ]]; then
