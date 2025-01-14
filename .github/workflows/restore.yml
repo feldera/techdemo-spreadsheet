@@ -1,17 +1,19 @@
-name: Hourly S3 Backup
+name: Restore from S3 Backup
 
 on:
-  schedule:
-    # Run every hour
-    - cron: "0 * * * *"
+  workflow_run:
+    workflows: ["Deploy Feldera Pipeline"]
+    types:
+      - completed
   workflow_dispatch:
 
 jobs:
   backup:
     runs-on: [ self-hosted, skylake40 ]
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
-      # Checkout the repository to get access to the backup script
+      # Checkout the repository to get access to the restore script
       - name: Checkout repository
         uses: actions/checkout@v3
 
@@ -23,13 +25,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
 
-      # Ensure the backup script is executable
+      # Ensure the restore script is executable
       - name: Make backup script executable
-        run: chmod +x ./backup/backup.sh
+        run: chmod +x ./backup/restore.sh
 
-      # Run the backup script
-      - name: Run backup script
+      # Run the restore script
+      - name: Run restore script
         env:
           FELDERA_HOST: ${{ secrets.FELDERA_HOST }}
           FELDERA_API_KEY: ${{ secrets.FELDERA_API_KEY }}
-        run: ./backup/backup.sh
+        run: ./backup/restore.sh
