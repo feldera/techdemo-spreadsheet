@@ -47,6 +47,7 @@ async fn main() {
         .allow_origin([
             "https://xls.feldera.io".parse().unwrap(),
             "http://localhost:7777".parse().unwrap(),
+            "http://127.0.0.1:7777".parse().unwrap(),
             "http://localhost:3000".parse().unwrap(),
         ])
         .allow_headers(Any);
