@@ -5,22 +5,23 @@ create function cell_value(cell varchar(64), mentions_ids bigint array, mentions
 -- Given a cell value e.g., =A0+B0, returns an array of cell ids that were mentioned in the formula
 create function mentions(cell varchar(64)) returns bigint array;
 
--- Forward declaration of spreadsheet view
-declare recursive view spreadsheet_view (
-                                        id bigint not null,
-                                        background integer not null,
-                                        raw_value varchar(64) not null,
-                                        computed_value varchar(64)
-    );
+-- Forward declaration of spreadsheet values that get computed by applying the `cell_value` udf to it
+declare recursive view spreadsheet_computed_values (
+    id bigint not null,
+    background integer not null,
+    raw_value varchar(64) not null,
+    computed_value varchar(64),
+    cnt integer not null
+);
 
 -- Raw spreadsheet cell data coming from backend/user, updates
 -- are inserted as new entries with newer timestamps
 create table spreadsheet_data (
-                                  id bigint not null,
-                                  ip varchar(45) not null,
-                                  ts timestamp not null,
-                                  raw_value varchar(64) not null,
-                                  background integer not null
+    id bigint not null,
+    ip varchar(45) not null,
+    ts timestamp not null,
+    raw_value varchar(64) not null,
+    background integer not null
 ) with (
       'materialized' = 'true',
       'connectors' = '[{
@@ -33,38 +34,38 @@ create table spreadsheet_data (
                     "fields": {
                         "id": { "values": [1039999974, 0, 1, 2, 12, 14, 40, 66, 92, 118, 170, 196, 222, 13, 65, 91, 117, 15, 41, 67, 93, 119, 39, 144] },
                         "ip": { "values": ["0"] },
-                        "raw_value": { "values": ["42", "=A39999999", "=A0", "=A0+B0", "Reference", "Functions", "=ABS(-1)", "=AVERAGE(1,2,3,1,2,3)", "={1,2,3}+{1,2,3}", "=SUM(1,2,3)", "=PRODUCT(ABS(1),2*1, 3,4*1)", "=RIGHT(\"apple\", 3)", "=LEFT(\"apple\", 3)", "Logic", "=2>=1", "=OR(1>1,1<>1)", "=AND(\"test\",\"True\", 1, true)", "Datetime", "2019-03-01T02:00:00.000Z", "2019-08-30T02:00:00.000Z", "=DAYS(P1, P2)", "=P1+5", "=XOR(0,1)", "=IF(TRUE,1,0)"] },
+                        "raw_value": { "values": ["42", "=A39999999", "=C0", "=B0+1", "Reference", "Functions", "=ABS(-1)", "=AVERAGE(1,2,3,1,2,3)", "={1,2,3}+{1,2,3}", "=SUM(1,2,3)", "=PRODUCT(ABS(1),2*1, 3,4*1)", "=RIGHT(\"apple\", 3)", "=LEFT(\"apple\", 3)", "Logic", "=2>=1", "=OR(1>1,1<>1)", "=AND(\"test\",\"True\", 1, true)", "Datetime", "2019-03-01T02:00:00.000Z", "2019-08-30T02:00:00.000Z", "=DAYS(P1, P2)", "=P1+5", "=XOR(0,1)", "=IF(TRUE,1,0)"] },
                         "background": { "strategy": "uniform", "range": [0, 1] }
                     }
                 }]
             }
         }
     }]'
-      );
+);
 
 -- Get the latest cell value for the spreadsheet.
 -- (By finding the one with the highest `ts` for a given `id`)
 create view latest_cells as with
-                                max_ts_per_cell as (
-                                    select
-                                        id,
-                                        max(ts) as max_ts
-                                    from
-                                        spreadsheet_data
-                                    group by
-                                        id
-                                )
-                            select
-                                s.id,
-                                s.raw_value,
-                                s.background,
-                                -- The append with null is silly but crucial to ensure that the
-                                -- cross join in `latest_cells_with_mention` returns all cells
-                                -- not just those that reference another cell
-                                ARRAY_APPEND(mentions(s.raw_value), null) as mentioned_cell_ids
-                            from
-                                spreadsheet_data s
-                                    join max_ts_per_cell mt on s.id = mt.id and s.ts = mt.max_ts;
+    max_ts_per_cell as (
+        select
+            id,
+            max(ts) as max_ts
+        from
+            spreadsheet_data
+        group by
+            id
+    )
+select
+    s.id,
+    s.raw_value,
+    s.background,
+    -- The append with null is silly but crucial to ensure that the
+    -- cross join in `latest_cells_with_mention` returns all cells
+    -- not just those that reference another cell
+    ARRAY_APPEND(mentions(s.raw_value), null) as mentioned_cell_ids
+from
+    spreadsheet_data s
+        join max_ts_per_cell mt on s.id = mt.id and s.ts = mt.max_ts;
 
 -- List all mentioned ids per latest cell
 create view latest_cells_with_mentions as
@@ -83,11 +84,14 @@ select
     m.raw_value,
     m.background,
     m.mentioned_id,
-    sv.computed_value as mentioned_value
+    sv.computed_value as mentioned_value,
+    -- We add a depth counter to prevent infinite recursion when cells reference each other
+    -- e.g., A0 is `=B0`, and B0 is `=A0+1`
+    coalesce(sv.cnt, 0) + 1 as cnt
 from
     latest_cells_with_mentions m
         left join
-    spreadsheet_view sv on m.mentioned_id = sv.id;
+    spreadsheet_computed_values sv on m.mentioned_id = sv.id;
 
 -- We aggregate mentioned values and ids back into arrays
 create local view mentions_aggregated as
@@ -96,23 +100,49 @@ select
     raw_value,
     background,
     ARRAY_AGG(mentioned_id) as mentions_ids,
-    ARRAY_AGG(mentioned_value) as mentions_values
+    ARRAY_AGG(mentioned_value) as mentions_values,
+    cnt
 from
     mentions_with_values
 group by
     id,
     raw_value,
-    background;
+    background,
+    cnt;
 
--- Calculate the final spreadsheet by executing the UDF for the formula
-create materialized view spreadsheet_view as
+-- Calculate the final spreadsheet by executing the UDF for the formula, apply recursively up to a depth of 10
+create local view spreadsheet_computed_values as
 select
     id,
     background,
     raw_value,
-    cell_value(raw_value, mentions_ids, mentions_values) AS computed_value
+    cell_value(raw_value, mentions_ids, mentions_values) AS computed_value,
+    cnt
 from
-    mentions_aggregated;
+    mentions_aggregated
+-- in case of cycles we abort the computation after 20 iterations
+where cnt < 20;
+
+-- Take the final value of the recursive iteration
+-- which is the one from `spreadsheet_computed_values` with the max count
+create materialized view spreadsheet_view as with
+    max_count_per_cell as (
+        select
+            id,
+            max(cnt) as max_cnt
+        from
+            spreadsheet_computed_values
+        group by
+            id
+    )
+select
+    s.id as id,
+    background,
+    raw_value,
+    computed_value
+from
+    spreadsheet_computed_values as s
+join max_count_per_cell mc on s.id = mc.id and s.cnt = mc.max_cnt;
 
 -- Figure out which IPs currently reached their API limit
 create materialized view api_limit_reached as

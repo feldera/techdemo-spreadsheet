@@ -32,7 +32,7 @@ pub fn cell_value(raw_content: Option<String>, mentions_ids: Option<Vec<Option<i
             context.insert(id_to_cell_reference(id), parse_as_value(value));
         }
     }
-    let data_function = |s: String| context.get(&s).cloned().unwrap_or_else(|| Value::Error(Error::Value));
+    let data_function = |s: String| context.get(&s).cloned().unwrap_or_else(|| Value::Blank);
 
     let result = calculate::calculate_formula(formula, Some(&data_function));
     let result_str = calculate::result_to_string(result);
