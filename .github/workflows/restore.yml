@@ -14,11 +14,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4 # repo checkout
-      - name: Setup rust toolchain
-        run: |
-          rustup update stable
-          rustup default stable
-          rustup set profile minimal
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
       - name: Rust Cache # cache the rust build artefacts
         uses: Swatinem/rust-cache@v2
       - name: Download and install fda binary
