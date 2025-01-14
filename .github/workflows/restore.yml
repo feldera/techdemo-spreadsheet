@@ -13,9 +13,16 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
-      # Checkout the repository to get access to the restore script
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4 # repo checkout
+      - name: Setup rust toolchain
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup set profile minimal
+      - name: Rust Cache # cache the rust build artefacts
+        uses: Swatinem/rust-cache@v2
+      - name: Download and install fda binary
+        run: cargo install fda
 
       # Set up AWS CLI
       - name: Configure AWS CLI
