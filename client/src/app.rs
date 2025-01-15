@@ -130,36 +130,41 @@ impl eframe::App for SpreadsheetApp {
             }
         }
 
-        // Put your widgets into a `SidePanel`, `TopBottomPanel`, `CentralPanel`, `Window` or `Area`.
-        // For inspiration and more examples, go to https://emilk.github.io/egui
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
-            // The top panel is often a good place for a menu bar:
-
             egui::menu::bar(ui, |ui| {
-                egui::widgets::global_theme_preference_buttons(ui);
-                if ui.button("📖 Read The Blog Post").clicked() {
-                    ctx.output_mut(|o| {
-                        o.open_url = Some(OpenUrl::new_tab(
-                            "https://docs.feldera.com/use_cases/real_time_apps/part1",
-                        ))
-                    });
-                }
-                if ui.button(format!("{GITHUB} Fork me on Github")).clicked() {
-                    ctx.output_mut(|o| {
-                        o.open_url = Some(OpenUrl::new_tab(
-                            "https://github.com/feldera/techdemo-spreadsheet",
-                        ))
-                    });
-                }
-                Window::new("Formula Reference")
-                    .open(&mut self.reference_open)
-                    .show(ctx, |ui| {
-                        let mut rw = ReferenceWindow {};
-                        rw.ui(ui);
-                    });
-                if ui.button("？ Formula Help").clicked() {
-                    self.reference_open = true;
-                }
+                ui.horizontal_wrapped(|ui| {
+                    egui::widgets::global_theme_preference_buttons(ui);
+                    if ui.button("📖 Read The Blog Post").clicked() {
+                        ctx.output_mut(|o| {
+                            o.open_url = Some(OpenUrl::new_tab(
+                                "https://docs.feldera.com/use_cases/real_time_apps/part1",
+                            ))
+                        });
+                    }
+                    if ui.button("📺 Video Tutorial").clicked() {
+                        ctx.output_mut(|o| {
+                            o.open_url = Some(OpenUrl::new_tab(
+                                "https://www.youtube.com/watch?v=ROa4duVqoOs",
+                            ))
+                        });
+                    }
+                    if ui.button(format!("{GITHUB} Fork me on Github")).clicked() {
+                        ctx.output_mut(|o| {
+                            o.open_url = Some(OpenUrl::new_tab(
+                                "https://github.com/feldera/techdemo-spreadsheet",
+                            ))
+                        });
+                    }
+                    Window::new("Formula Reference")
+                        .open(&mut self.reference_open)
+                        .show(ctx, |ui| {
+                            let mut rw = ReferenceWindow {};
+                            rw.ui(ui);
+                        });
+                    if ui.button("？ Help").clicked() {
+                        self.reference_open = true;
+                    }
+                });
             });
         });
 
