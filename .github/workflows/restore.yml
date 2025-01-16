@@ -9,7 +9,7 @@ on:
 
 jobs:
   restore:
-    runs-on: [ self-hosted, skylake40 ]
+    runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
 
     steps:
