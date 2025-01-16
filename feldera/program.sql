@@ -155,7 +155,7 @@ where
 group by
     ip
 having
-    count(*) > 10000;
+    count(*) > 100;
 
 -- Compute statistics
 create materialized view spreadsheet_statistics as
