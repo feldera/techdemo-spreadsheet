@@ -8,7 +8,7 @@ on:
 
 jobs:
   backup:
-    runs-on: [ self-hosted, skylake40 ]
+    runs-on: ubuntu-latest
 
     steps:
       # Checkout the repository to get access to the backup script
