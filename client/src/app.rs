@@ -5,7 +5,7 @@ use std::sync::Arc;
 use egui::color_picker::Alpha;
 use egui::mutex::RwLock;
 use egui::special_emojis::GITHUB;
-use egui::{Color32, Key, OpenUrl, Pos2, Rect, RichText, ScrollArea, Sense, Vec2, Window};
+use egui::{Color32, Key, OpenUrl, Pos2, Rect, RichText, ScrollArea, Sense, Ui, Vec2, Window};
 use egui_extras::{Column, TableBuilder};
 use ewebsock::{WsEvent, WsMessage, WsReceiver};
 use log::{error, trace};
@@ -37,6 +37,11 @@ pub struct SpreadsheetApp {
     cell_cache: CellCache,
     editing_cell: Option<u64>,
     reference_open: bool,
+}
+
+pub fn is_mobile(ctx: &egui::Context) -> bool {
+    let screen_size = ctx.screen_rect().size();
+    screen_size.x < 550.0
 }
 
 impl SpreadsheetApp {
@@ -172,127 +177,157 @@ impl eframe::App for SpreadsheetApp {
             ui.heading(RichText::new("Billion Cell Spreadsheet").strong());
             ui.add_space(20.0);
 
-            ui.vertical(|ui| {
+            fn active_users(ui: &mut Ui, stats: &Stats) {
+                ui.label(RichText::new("Currently Active Users:").strong());
+                let icon_size = Vec2::splat(10.0);
                 ui.horizontal(|ui| {
-                    let stats = self.stats.read().clone();
-
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
-                        // Active users section with icons
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("Currently Active Users:").strong());
-                            let icon_size = Vec2::splat(10.0);
-                            ui.horizontal(|ui| {
-                                for _ in 0..stats.currently_active_users.min(10) {
-                                    ui.painter().circle_filled(
-                                        Pos2::new(
-                                            ui.cursor().min.x + icon_size.x,
-                                            ui.cursor().center().y,
-                                        ),
-                                        icon_size.x / 2.0,
-                                        Color32::LIGHT_GREEN,
-                                    );
-                                    ui.add_space(12.0);
-                                }
-                                if stats.currently_active_users > 10 {
-                                    ui.label(format!(
-                                        "+{} more",
-                                        stats.currently_active_users - 10
-                                    ));
-                                }
-                            });
-                        });
-
-                        ui.separator();
-
-                        // Meter for total filled cells
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new("Cells With Content:").strong());
-                            let max_cells = (SpreadsheetApp::DEFAULT_COLS as u64
-                                * SpreadsheetApp::DEFAULT_ROWS as u64)
-                                as f64;
-                            let filled_ratio = (stats.filled_total as f64 / max_cells) as f32;
-                            let filled_color = if filled_ratio < 0.5 {
-                                Color32::from_rgb(100, 150, 250)
-                            } else {
-                                Color32::from_rgb(250, 100, 100)
-                            };
-                            ui.painter().rect_filled(
-                                Rect::from_min_size(
-                                    ui.cursor().min,
-                                    Vec2::new(filled_ratio * 150.0, 15.0),
-                                ),
-                                4.0,
-                                filled_color,
-                            );
-                            ui.label(format!("{}/{}", stats.filled_total, max_cells));
-                            ui.label(format!("{}%", filled_ratio * 100.0));
-                        });
-
-                        ui.separator();
-
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Cells Edited This Hour: ").strong());
-                            ui.label(format!("{}", stats.filled_this_hour));
-                        });
-
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Cells Edited Today: ").strong());
-                            ui.label(format!("{}", stats.filled_today));
-                        });
-
-                        ui.horizontal(|ui| {
-                            ui.label(RichText::new("Cells Edited This Week: ").strong());
-                            ui.label(format!("{}", stats.filled_this_week));
-                        });
-                    });
-
-                    ui.add_space(50.0);
-
-                    ui.with_layout(
-                        egui::Layout::right_to_left(egui::Align::TOP).with_main_wrap(true),
-                        |ui| {
-                            ui.vertical(|ui| {
-                                ui.heading("Built with");
-
-                                ui.horizontal(|ui| {
-                                    ui.add(
-                                        egui::Hyperlink::from_label_and_url(
-                                            format!("{GITHUB} feldera"),
-                                            "https://github.com/feldera/feldera",
-                                        )
-                                            .open_in_new_tab(true),
-                                    );
-                                    ui.add_space(10.0);
-                                    ui.add(
-                                        egui::Hyperlink::from_label_and_url(
-                                            format!("{GITHUB} axum"),
-                                            "https://github.com/tokio-rs/axum",
-                                        )
-                                            .open_in_new_tab(true),
-                                    );
-                                    ui.add_space(10.0);
-                                    ui.add(
-                                        egui::Hyperlink::from_label_and_url(
-                                            format!("{GITHUB} egui"),
-                                            "https://github.com/emilk/egui",
-                                        )
-                                            .open_in_new_tab(true),
-                                    );
-                                    ui.add_space(10.0);
-                                    ui.add(
-                                        egui::Hyperlink::from_label_and_url(
-                                            format!("{GITHUB} XLFormula Engine"),
-                                            "https://github.com/jiradaherbst/XLFormula-Engine",
-                                        )
-                                            .open_in_new_tab(true),
-                                    );
-                                    ui.add_space(10.0);
-                                });
-                            });
-                        },
-                    );
+                    for _ in 0..stats.currently_active_users.min(10) {
+                        ui.painter().circle_filled(
+                            Pos2::new(
+                                ui.cursor().min.x + icon_size.x,
+                                ui.cursor().center().y,
+                            ),
+                            icon_size.x / 2.0,
+                            Color32::LIGHT_GREEN,
+                        );
+                        ui.add_space(12.0);
+                    }
+                    if stats.currently_active_users > 10 {
+                        ui.label(format!(
+                            "+{} more",
+                            stats.currently_active_users - 10
+                        ));
+                    }
                 });
-            });
+            }
+
+            fn cells_with_content(ui: &mut Ui, stats: &Stats) {
+                ui.label(RichText::new("Cells With Content:").strong());
+                let max_cells = (SpreadsheetApp::DEFAULT_COLS as u64
+                    * SpreadsheetApp::DEFAULT_ROWS as u64)
+                    as f64;
+                let filled_ratio = (stats.filled_total as f64 / max_cells) as f32;
+                let filled_color = if filled_ratio < 0.5 {
+                    Color32::from_rgb(100, 150, 250)
+                } else {
+                    Color32::from_rgb(250, 100, 100)
+                };
+                ui.painter().rect_filled(
+                    Rect::from_min_size(
+                        ui.cursor().min,
+                        Vec2::new(filled_ratio * 150.0, 15.0),
+                    ),
+                    4.0,
+                    filled_color,
+                );
+                ui.label(format!("{}/{}", stats.filled_total, max_cells));
+                ui.label(format!("{}%", filled_ratio * 100.0));
+            }
+
+            fn timed_stats(ui: &mut Ui, stats: &Stats) {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Cells Edited This Hour: ").strong());
+                    ui.label(format!("{}", stats.filled_this_hour));
+                });
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Cells Edited Today: ").strong());
+                    ui.label(format!("{}", stats.filled_today));
+                });
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("Cells Edited This Week: ").strong());
+                    ui.label(format!("{}", stats.filled_this_week));
+                });
+            }
+
+            fn built_with(ui: &mut Ui) {
+                ui.heading("Built with");
+
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::Hyperlink::from_label_and_url(
+                            format!("{GITHUB} feldera"),
+                            "https://github.com/feldera/feldera",
+                        )
+                            .open_in_new_tab(true),
+                    );
+                    ui.add_space(10.0);
+                    ui.add(
+                        egui::Hyperlink::from_label_and_url(
+                            format!("{GITHUB} axum"),
+                            "https://github.com/tokio-rs/axum",
+                        )
+                            .open_in_new_tab(true),
+                    );
+                    ui.add_space(10.0);
+                    ui.add(
+                        egui::Hyperlink::from_label_and_url(
+                            format!("{GITHUB} egui"),
+                            "https://github.com/emilk/egui",
+                        )
+                            .open_in_new_tab(true),
+                    );
+                    ui.add_space(10.0);
+                    ui.add(
+                        egui::Hyperlink::from_label_and_url(
+                            format!("{GITHUB} XLFormula Engine"),
+                            "https://github.com/jiradaherbst/XLFormula-Engine",
+                        )
+                            .open_in_new_tab(true),
+                    );
+                    ui.add_space(10.0);
+                });
+            }
+
+            let stats = self.stats.read().clone();
+            if !is_mobile(ctx) {
+                ui.vertical(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::TOP), |ui| {
+                            // Active users section with icons
+                            ui.vertical(|ui| {
+                                active_users(ui, &stats);
+                            });
+                            ui.separator();
+                            // Meter for total filled cells
+                            ui.vertical(|ui| {
+                                cells_with_content(ui, &stats);
+                            });
+                            ui.separator();
+                            timed_stats(ui, &stats);
+                        });
+
+                        ui.add_space(50.0);
+
+                        ui.with_layout(
+                            egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
+                            |ui| {
+                                ui.vertical(|ui| {
+                                    built_with(ui)
+                                });
+                            },
+                        );
+                    });
+                });
+            }
+            else {
+                ui.vertical(|ui| {
+                        active_users(ui, &stats);
+                        ui.add_space(20.0);
+                        cells_with_content(ui, &stats);
+                        timed_stats(ui, &stats);
+                    ui.add_space(20.0);
+
+                        ui.with_layout(
+                            egui::Layout::left_to_right(egui::Align::TOP).with_main_wrap(true),
+                            |ui| {
+                                ui.vertical(|ui| {
+                                    built_with(ui)
+                                });
+                            },
+                        );
+                });
+            }
+
 
             ui.add_space(20.0);
 
