@@ -1,30 +1,32 @@
-use std::collections::{BTreeMap, VecDeque};
+use feldera_sqllib::*;
 
+use std::sync::Arc;
+use std::collections::{BTreeMap, VecDeque};
 use xlformula_engine::calculate;
 use xlformula_engine::parse_formula;
 use xlformula_engine::NoCustomFunction;
 use xlformula_engine::types::{Formula, Value, Error, Boolean};
 use chrono::DateTime;
 
-fn parse_as_value(input: String) -> Value {
-    if let Ok(number) = input.parse::<f32>() {
+fn parse_as_value(input: SqlString) -> Value {
+    if let Ok(number) = input.str().parse::<f32>() {
         return Value::Number(number);
     }
-    if let Ok(boolean) = input.parse::<bool>() {
+    if let Ok(boolean) = input.str().parse::<bool>() {
         return Value::Boolean(if boolean { Boolean::True } else { Boolean::False });
     }
-    if let Ok(date) = DateTime::parse_from_rfc3339(input.as_str()) {
+    if let Ok(date) = DateTime::parse_from_rfc3339(input.str()) {
         return Value::Date(date);
     }
-    Value::Text(input)
+    Value::Text(String::from(input.str()))
 }
 
-pub fn cell_value(raw_content: Option<String>, mentions_ids: Option<Vec<Option<i64>>>, mentions_values: Option<Vec<Option<String>>>) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    let cell_content = raw_content.unwrap_or_else(|| String::new());
-    let formula = parse_formula::parse_string_to_formula(&*cell_content, None::<NoCustomFunction>);
+pub fn cell_value(raw_content: Option<SqlString>, mentions_ids: Option<Arc<Vec<Option<i64>>>>, mentions_values: Option<Arc<Vec<Option<SqlString>>>>) -> Result<Option<SqlString>, Box<dyn std::error::Error>> {
+    let cell_content = raw_content.unwrap_or_else(|| SqlString::new());
+    let formula = parse_formula::parse_string_to_formula(cell_content.str(), None::<NoCustomFunction>);
 
-    let mentions_ids = mentions_ids.unwrap_or_else(|| vec![]);
-    let mentions_values = mentions_values.unwrap_or_else(|| vec![]);
+    let mentions_ids = mentions_ids.map(Arc::unwrap_or_clone).unwrap_or_else(|| vec![]);
+    let mentions_values = mentions_values.map(Arc::unwrap_or_clone).unwrap_or_else(|| vec![]);
     assert_eq!(mentions_ids.len(), mentions_values.len());
     let mut context = BTreeMap::new();
     for (id, value) in mentions_ids.into_iter().zip(mentions_values.into_iter()) {
@@ -36,7 +38,7 @@ pub fn cell_value(raw_content: Option<String>, mentions_ids: Option<Vec<Option<i
 
     let result = calculate::calculate_formula(formula, Some(&data_function));
     let result_str = calculate::result_to_string(result);
-    Ok(Some(result_str))
+    Ok(Some(SqlString::from(result_str)))
 }
 
 fn cell_references_to_ids(crf: &str) -> Option<i64> {
@@ -66,9 +68,9 @@ fn id_to_cell_reference(id: i64) -> String {
     result
 }
 
-pub fn mentions(raw_content: Option<String>) -> Result<Option<Vec<Option<i64>>>, Box<dyn std::error::Error>> {
-    let cell_content = raw_content.unwrap_or_else(|| String::new());
-    let formula = parse_formula::parse_string_to_formula(&cell_content, None::<NoCustomFunction>);
+pub fn mentions(raw_content: Option<SqlString>) -> Result<Option<Arc<Vec<Option<i64>>>>, Box<dyn std::error::Error>> {
+    let cell_content = raw_content.unwrap_or_else(|| SqlString::new());
+    let formula = parse_formula::parse_string_to_formula(cell_content.str(), None::<NoCustomFunction>);
 
     let mut formulas = VecDeque::from(vec![formula]);
     let mut references = vec![];
@@ -91,7 +93,7 @@ pub fn mentions(raw_content: Option<String>) -> Result<Option<Vec<Option<i64>>>,
     let mut cell_ids: Vec<Option<i64>> = references.iter().map(|r| cell_references_to_ids(r)).collect();
     cell_ids.sort_unstable();
 
-    Ok(Some(cell_ids))
+    Ok(Some(Arc::new(cell_ids)))
 }
 
 #[cfg(test)]
