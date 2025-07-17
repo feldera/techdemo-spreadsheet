@@ -8,8 +8,6 @@ on:
     paths:
       - 'server/**'
       - '.github/workflows/server.yml'
-      - 'Cargo.lock'
-      - 'Cargo.toml'
 
 jobs:
   deploy:

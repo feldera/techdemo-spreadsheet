@@ -7,8 +7,6 @@ on:
     paths:
       - 'feldera/**'
       - '.github/workflows/feldera.yml'
-      - 'Cargo.lock'
-      - 'Cargo.toml'
 
 permissions:
   contents: read
