@@ -1,6 +1,5 @@
 fda delete --force xls || true
 fda create xls || true
-fda stop xls || true
 fda program set xls program.sql --udf-rs udf/src/lib.rs --udf-toml udf/udf.toml
 fda set-config xls workers 8
 fda set-config xls storage true
