@@ -1,5 +1,8 @@
 # 1bln Cell Spreadsheet Techdemo
 
+**Note** This repository is archived; we no longer host/maintain the demo on xls.feldera.io. The code is
+still fine to be used as a reference to use and run.
+
 This is a tech demo showing incremental computation for a simple, spreadsheet-like application.
 The application uses feldera as the DBMS/incremental compute engine, axum as the backend
 and egui as the frontend.
